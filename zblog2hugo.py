@@ -313,8 +313,13 @@ def parse_arguments():
         default="posts",
         help="Hugo 文章输出目录（默认：posts）",
     )
-    # 解析并返回结果
-    return parser.parse_args()
+    # 解析命令行参数
+    args = parser.parse_args()
+    # 数据库文件不存在时，打印用法（帮助信息）和错误提示后退出（退出码 2）
+    if not os.path.exists(args.db_path):
+        parser.error(f"找不到数据库文件：{args.db_path}（默认文件为 zblog.mdb，可把它放到脚本目录，或指定其他路径）")
+    # 数据库存在，返回解析结果
+    return args
 
 
 # 脚本入口：直接运行本文件时才执行转换
