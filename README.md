@@ -96,6 +96,21 @@ front matter 字段说明：
 | `make_filename` | 生成输出文件名（slug.md） |
 | `convert_all` | 主转换流程 |
 
+## Hugo 站点配置建议
+
+转换出的文章 front matter 带 `categories` 字段、少数正文含内嵌 HTML，建议在 Hugo 站点配置（hugo.toml）中加上：
+
+```toml
+[taxonomies]
+  tag = "tags"
+  category = "categories"   # 部分主题的 related 模板依赖 categories taxonomy
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true         # 允许渲染正文残留的内嵌 HTML，消除 Raw HTML omitted 警告
+```
+
 ## 常见问题
 
 **Q：提示“未发现数据源名称并且未指定默认驱动”**
