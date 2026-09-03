@@ -271,8 +271,10 @@ def convert_all(db_path, output_dir):
     # 输出目录不存在则创建
     os.makedirs(output_dir, exist_ok=True)
 
-    # 逐篇文章转换并写出文件
-    for article in articles:
+    # 文章总数，用于进度显示
+    total = len(articles)
+    # 逐篇文章转换并写出文件（enumerate 从 1 开始计数，方便显示进度）
+    for index, article in enumerate(articles, start=1):
         # 生成 Markdown 内容
         markdown_text = build_markdown(article, categories, tags)
         # 拼出完整输出路径
@@ -280,6 +282,10 @@ def convert_all(db_path, output_dir):
         # 以 UTF-8 编码写入文件（Hugo 要求 UTF-8）
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown_text)
+        # 单行刷新进度：\r 让光标回到行首，覆盖上一行，形成原地更新的效果
+        print(f"\r转换进度：{index}/{total} 篇", end="", flush=True)
+    # 进度显示结束后换行，避免后续输出接在同一行
+    print()
 
     # 关闭数据库连接
     conn.close()
