@@ -26,12 +26,14 @@ pip install pyodbc markdownify
 ## 使用方法
 
 ```bash
-python zblog2hugo.py <数据库文件> <输出目录>
+python zblog2hugo.py [数据库文件] [输出目录]
 ```
+
+两个参数均可省略，省略时使用默认值 `zblog.mdb` 和 `posts`。
 
 参数说明：
 
-| 参数 | 说明 | 示例 |
+| 参数 | 说明 | 默认值 |
 | --- | --- | --- |
 | 数据库文件 | Z-Blog 的 .mdb 数据库路径（相对、绝对路径均可） | `zblog.mdb` |
 | 输出目录 | Hugo 文章的输出文件夹（不存在会自动创建） | `posts` |
@@ -39,7 +41,8 @@ python zblog2hugo.py <数据库文件> <输出目录>
 完整示例：
 
 ```bash
-python zblog2hugo.py zblog.mdb posts
+python zblog2hugo.py                  # 使用默认值
+python zblog2hugo.py zblog.mdb posts  # 手动指定数据库和输出目录
 ```
 
 运行完成后会提示转换结果，例如：

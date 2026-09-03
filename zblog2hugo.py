@@ -13,10 +13,11 @@ zblog2hugo.py —— 把 Z-Blog ASP 2.3 数据库（zblog.mdb）里的文章转�
        不转换摘要（log_Intro）和评论，也不处理图片。
     4. slug 优先使用文章的 log_Url 字段，该字段为空时直接使用文章编号。
 
-使用方法（通过命令行参数指定数据库和输出目录）：
-    python zblog2hugo.py <数据库文件> <输出目录>
+使用方法（通过命令行参数指定数据库和输出目录，均可省略，默认 zblog.mdb 和 posts）：
+    python zblog2hugo.py [数据库文件] [输出目录]
     例如：
-    python zblog2hugo.py zblog.mdb posts
+    python zblog2hugo.py                  # 使用默认值 zblog.mdb 和 posts
+    python zblog2hugo.py zblog.mdb posts  # 手动指定数据库和输出目录
 
 运行环境：
     - Python 3.x
@@ -289,19 +290,29 @@ def convert_all(db_path, output_dir):
 def parse_arguments():
     """
     解析命令行参数。
-    需要两个参数（顺序固定）：
-        第 1 个：数据库文件路径（.mdb 文件）
-        第 2 个：Hugo 文章输出目录
+    两个参数都可以省略，省略时使用默认值：
+        第 1 个：数据库文件路径（.mdb 文件），默认 zblog.mdb
+        第 2 个：Hugo 文章输出目录，默认 posts
     返回：包含 db_path 和 output_dir 两个属性的对象。
     """
     # 创建参数解析器，description 会显示在 -h 帮助信息里
     parser = argparse.ArgumentParser(
         description="把 Z-Blog ASP 2.3 数据库（.mdb）里的文章转换成 Hugo 格式的 Markdown 文件"
     )
-    # 第 1 个位置参数：数据库文件路径
-    parser.add_argument("db_path", help="Z-Blog 数据库文件路径（zblog.mdb）")
-    # 第 2 个位置参数：输出目录
-    parser.add_argument("output_dir", help="Hugo 文章输出目录（例如 posts）")
+    # 第 1 个位置参数：数据库文件路径（nargs="?" 表示可以省略，省略时用 default）
+    parser.add_argument(
+        "db_path",
+        nargs="?",
+        default="zblog.mdb",
+        help="Z-Blog 数据库文件路径（默认：zblog.mdb）",
+    )
+    # 第 2 个位置参数：输出目录（同样可以省略）
+    parser.add_argument(
+        "output_dir",
+        nargs="?",
+        default="posts",
+        help="Hugo 文章输出目录（默认：posts）",
+    )
     # 解析并返回结果
     return parser.parse_args()
 
