@@ -30,6 +30,7 @@ import os
 import re
 import json
 import argparse
+import urllib.parse
 import pyodbc
 from markdownify import markdownify as convert_html_to_markdown
 
@@ -44,6 +45,9 @@ TIMEZONE_SUFFIX = "+08:00"
 # 最低发布等级：Z-Blog 中 log_Level >= 2 视为已发布，
 # 小于该值（草稿、待审核）的文章会标记为 draft: true
 MIN_PUBLISH_LEVEL = 2
+
+# 正文里的博客地址占位符，输出时会被配置表里的 ZC_BLOG_HOST 替换
+HOST_PLACEHOLDER = "<#ZC_BLOG_HOST#>"
 
 
 # ==================== 数据库读取部分 ====================
@@ -85,6 +89,39 @@ def load_tags(conn):
     for row in conn.cursor().execute("SELECT tag_ID, tag_Name FROM blog_Tag"):
         tags[row.tag_ID] = row.tag_Name
     return tags
+
+
+def load_blog_host(conn):
+    """
+    从配置表 blog_Config 的 Blog 记录里读取 ZC_BLOG_HOST（博客地址）。
+    Blog 记录的值是一串用 \\x02 分成两段的文本：前一段是字段名，后一段是字段值，
+    字段名和字段值内部都用 \\x01 分隔；字段值经过 URL 编码（例如 https%3A//...）。
+    参数 conn：数据库连接对象。
+    返回：解码后的博客地址，例如 "https://www.williamlong.info/weibo/"；
+          找不到时返回空字符串。
+    """
+    # 用参数化查询取出 Blog 这条配置记录
+    row = conn.cursor().execute(
+        "SELECT conf_Value FROM blog_Config WHERE conf_Name = ?", "Blog"
+    ).fetchone()
+    if not row:
+        return ""
+
+    # \x02 前面是字段名列表，后面是字段值列表
+    parts = (row.conf_Value or "").split("\x02")
+    if len(parts) < 2:
+        return ""
+    names = parts[0].split("\x01")
+    values = parts[1].split("\x01")
+
+    # 找到 ZC_BLOG_HOST 在字段名列表中的位置，再取同位置的值
+    if "ZC_BLOG_HOST" not in names:
+        return ""
+    index = names.index("ZC_BLOG_HOST")
+    if index >= len(values):
+        return ""
+    # 字段值是 URL 编码的，解码后才是真实地址
+    return urllib.parse.unquote(values[index])
 
 
 def load_articles(conn):
@@ -206,16 +243,21 @@ def build_front_matter(article, categories, tags):
     return "\n".join(lines)
 
 
-def build_body(article):
+def build_body(article, blog_host):
     """
     生成文章正文部分（Markdown 文件里 front matter 之后的内容）。
     把原始 HTML 正文转换成 Markdown 格式，不包含摘要（log_Intro）。
-    参数 article：文章字典。
+    参数：
+        article：文章字典。
+        blog_host：博客地址，用于替换正文里的 <#ZC_BLOG_HOST#> 占位符。
     返回：Markdown 格式的正文字符串。
     """
+    # 先替换占位符再转换：HTML 转 Markdown 时会把下划线转义成 \_，
+    # 导致占位符变形（<#ZC\_BLOG\_HOST#>）而无法再匹配，所以必须在转换前替换
+    content_with_host = article["content"].replace(HOST_PLACEHOLDER, blog_host)
     # 用 markdownify 把 HTML 转成 Markdown；标题用 # 风格（ATX），列表用 - 符号
     markdown_text = convert_html_to_markdown(
-        article["content"],
+        content_with_host,
         heading_style="ATX",
         bullets="-",
     )
@@ -224,19 +266,21 @@ def build_body(article):
     return markdown_text
 
 
-def build_markdown(article, categories, tags):
+def build_markdown(article, categories, tags, blog_host):
     """
     把一篇 Z-Blog 文章组装成完整的 Hugo Markdown 文件内容。
     结构：front matter + 空行 + 正文。
-    参数与 build_front_matter 相同。
+    参数与 build_front_matter 相同，另外多一个 blog_host（博客地址）。
     返回：完整的文件内容字符串。
     """
     # front matter（标题、时间、分类、标签等元信息）
     front_matter = build_front_matter(article, categories, tags)
-    # 正文内容
-    body = build_body(article)
+    # 正文内容（占位符 <#ZC_BLOG_HOST#> 会在正文生成时替换成博客地址）
+    body = build_body(article, blog_host)
     # 组合成完整文件：front matter、空行、正文
-    return f"{front_matter}\n\n{body}\n"
+    markdown_text = f"{front_matter}\n\n{body}\n"
+    # 兜底：front matter 里若也出现占位符，一并替换
+    return markdown_text.replace(HOST_PLACEHOLDER, blog_host)
 
 
 def make_filename(article):
@@ -265,6 +309,8 @@ def convert_all(db_path, output_dir):
     # 预先读取分类表和标签表，转成 {ID: 名称} 字典方便查询
     categories = load_categories(conn)
     tags = load_tags(conn)
+    # 读取配置表里的博客地址（用于替换正文中的 <#ZC_BLOG_HOST#> 占位符）
+    blog_host = load_blog_host(conn)
     # 读取全部文章
     articles = load_articles(conn)
 
@@ -275,8 +321,8 @@ def convert_all(db_path, output_dir):
     total = len(articles)
     # 逐篇文章转换并写出文件（enumerate 从 1 开始计数，方便显示进度）
     for index, article in enumerate(articles, start=1):
-        # 生成 Markdown 内容
-        markdown_text = build_markdown(article, categories, tags)
+        # 生成 Markdown 内容（正文里的 <#ZC_BLOG_HOST#> 已替换为真实地址）
+        markdown_text = build_markdown(article, categories, tags, blog_host)
         # 拼出完整输出路径
         output_path = os.path.join(output_dir, make_filename(article))
         # 以 UTF-8 编码写入文件（Hugo 要求 UTF-8）
