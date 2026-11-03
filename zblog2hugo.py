@@ -32,7 +32,7 @@ import json
 import argparse
 import urllib.parse
 import pyodbc
-from markdownify import markdownify as convert_html_to_markdown
+from markdownify import MarkdownConverter, chomp
 
 # ==================== 配置区（按需修改） ====================
 
@@ -157,6 +157,30 @@ def load_articles(conn):
 
 # ==================== 转换处理部分 ====================
 
+class ZBlogConverter(MarkdownConverter):
+    """
+    自定义 HTML 转 Markdown 的转换器，修正“链接文字与地址相同”的链接。
+    markdownify 默认会把 <a href="url">url</a> 转成简写的 <url>，
+    这种写法在 Hugo 里会失效，这里改成反引号包裹的代码文本：
+        <a href="http://example.com">http://example.com</a>  ->  `http://example.com`
+    """
+
+    def convert_a(self, el, text, convert_as_inline):
+        # 取出链接地址和标题
+        href = el.get("href")
+        title = el.get("title")
+        # 链接文字与地址完全相同（且没有 title）时，输出反引号包裹的代码文本
+        if (href
+                and text.strip().replace(r"\_", "_") == href
+                and not title
+                and not self.options["default_title"]):
+            # chomp 用来保留链接前后的空格，避免文字和链接粘连
+            prefix, suffix, _ = chomp(text)
+            return f"{prefix}`{href}`{suffix}"
+        # 其他情况交给父类，按正常的 Markdown 链接处理
+        return super().convert_a(el, text, convert_as_inline)
+
+
 def parse_tag_ids(tag_field):
     """
     解析文章的标签字段，提取里面所有的标签编号。
@@ -255,12 +279,11 @@ def build_body(article, blog_host):
     # 先替换占位符再转换：HTML 转 Markdown 时会把下划线转义成 \_，
     # 导致占位符变形（<#ZC\_BLOG\_HOST#>）而无法再匹配，所以必须在转换前替换
     content_with_host = article["content"].replace(HOST_PLACEHOLDER, blog_host)
-    # 用 markdownify 把 HTML 转成 Markdown；标题用 # 风格（ATX），列表用 - 符号
-    markdown_text = convert_html_to_markdown(
-        content_with_host,
+    # 用自定义转换器把 HTML 转成 Markdown；标题用 # 风格（ATX），列表用 - 符号
+    markdown_text = ZBlogConverter(
         heading_style="ATX",
         bullets="-",
-    )
+    ).convert(content_with_host)
     # 转换后可能产生连续多个空行，统一压缩成最多一个空行（两个换行符）
     markdown_text = re.sub(r"\n{3,}", "\n\n", markdown_text).strip()
     return markdown_text
