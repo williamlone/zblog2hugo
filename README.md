@@ -30,9 +30,20 @@ pip install pyodbc markdownify
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
 | `ARTICLE_TABLE` | 文章表表名；表名含空格等特殊字符时用方括号括起来，如 `[My Articles]` | `blog_Article` |
+| `CATEGORIES_SOURCE` | `categories` 字段的内容来源：`category`（分类）或 `tag`（标签） | `category` |
+| `TAGS_SOURCE` | `tags` 字段的内容来源：`category`（分类）或 `tag`（标签） | `tag` |
 | `ODBC_DRIVER` | Access ODBC 驱动名称（32/64 位需与 Python 一致） | `Microsoft Access Driver (*.mdb, *.accdb)` |
 | `TIMEZONE_SUFFIX` | 输出日期的时区后缀 | `+08:00` |
 | `MIN_PUBLISH_LEVEL` | 最低发布等级，低于此值的文章标记为草稿 | `2` |
+
+`categories` 和 `tags` 的来源可以互换，例如：
+
+```python
+CATEGORIES_SOURCE = "tag"       # categories 里写标签
+TAGS_SOURCE = "category"        # tags 里写分类
+```
+
+两项填同一个值时，两个字段会写入相同的名称列表；某篇文章对应来源没有名称时，该字段会省略。
 
 ## 使用方法
 
@@ -90,8 +101,8 @@ front matter 字段说明：
 | date | log_PostTime | 发布时间（北京时间 +08:00） |
 | slug | log_Url，为空则用 log_ID | 文章地址标识，同时用作文件名 |
 | draft | log_Level | 等级 >= 2 为 `false`（发布），否则 `true`（草稿） |
-| categories | log_CateID -> blog_Category | 分类名称（每篇文章一个分类） |
-| tags | log_Tag -> blog_Tag | 标签名称列表 |
+| categories | `CATEGORIES_SOURCE` 指定的来源 | 默认为分类名称（log_CateID -> blog_Category），可改为标签 |
+| tags | `TAGS_SOURCE` 指定的来源 | 默认为标签名称列表（log_Tag -> blog_Tag），可改为分类 |
 | weight | log_IsTop | 置顶文章会额外写入 `weight: 1` |
 
 ## 代码结构
@@ -102,6 +113,7 @@ front matter 字段说明：
 | `load_categories` / `load_tags` | 读取分类表 / 标签表，转成 {ID: 名称} 字典 |
 | `load_articles` | 读取全部文章 |
 | `make_slug` | 生成 slug（log_Url 为空时用文章编号） |
+| `resolve_names` | 按配置选择 front matter 写入分类还是标签 |
 | `build_front_matter` | 生成 YAML front matter |
 | `build_body` | 把 HTML 正文转换成 Markdown |
 | `make_filename` | 生成输出文件名（slug.md） |

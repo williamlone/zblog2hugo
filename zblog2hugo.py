@@ -4,7 +4,7 @@ zblog2hugo.py —— 把 Z-Blog ASP 2.3 数据库（zblog.mdb）里的文章转�
 
 功能说明：
     1. 读取 Access 数据库中的三张表：
-        - 文章表（表名见配置区 ARTICLE_TABLE，默认 blog_Article）：文章表（标题、正文、发布时间等）
+        - ARTICLE_TABLE ：文章表（标题、正文、发布时间等，默认 blog_Article）
         - blog_Category ：分类表（cate_ID -> cate_Name）
         - blog_Tag      ：标签表（tag_ID -> tag_Name）
     2. 把每篇文章生成为一个 Markdown 文件（带 Hugo 的 YAML front matter），
@@ -12,6 +12,7 @@ zblog2hugo.py —— 把 Z-Blog ASP 2.3 数据库（zblog.mdb）里的文章转�
     3. 文章正文（log_Content）由 HTML 转换成 Markdown 格式；
        不转换摘要（log_Intro）和评论，也不处理图片。
     4. slug 优先使用文章的 log_Url 字段，该字段为空时直接使用文章编号。
+    5. front matter 中 categories / tags 的内容来源由配置区决定，两者可互换。
 
 使用方法（通过命令行参数指定数据库和输出目录，均可省略，默认 zblog.mdb 和 posts）：
     python zblog2hugo.py [数据库文件] [输出目录]
@@ -49,6 +50,14 @@ MIN_PUBLISH_LEVEL = 2
 # 文章表表名（默认 blog_Article；数据库里表名不同时在这里修改即可）
 # 表名含空格等特殊字符时，请用方括号括起来，例如：[My Articles]
 ARTICLE_TABLE = "blog_Article"
+
+# Hugo front matter 中 categories / tags 字段的内容来源，可选：
+#   "category"：使用 Z-Blog 分类名称（每篇文章一个）
+#   "tag"     ：使用 Z-Blog 标签名称（可能有多个）
+# 两项可自由组合，例如 categories 填 "tag"、tags 填 "category" 即为互换；
+# 两项填同一个值时，两个字段会写入相同的名称列表。
+CATEGORIES_SOURCE = "category"
+TAGS_SOURCE = "tag"
 
 # 正文里的博客地址占位符，输出时会被配置表里的 ZC_BLOG_HOST 替换
 HOST_PLACEHOLDER = "<#ZC_BLOG_HOST#>"
@@ -219,9 +228,25 @@ def make_yaml_string(text):
     return json.dumps(text, ensure_ascii=False)
 
 
+def resolve_names(source, category_names, tag_names):
+    """
+    按配置区的来源设置，选出要写入 front matter 的名称列表。
+    参数 source："category"（用分类名称）或 "tag"（用标签名称）。
+    参数 category_names：分类名称列表；tag_names：标签名称列表。
+    返回：选中的名称列表。
+    """
+    if source == "category":
+        return category_names
+    if source == "tag":
+        return tag_names
+    raise ValueError(f"未知的分类/标签来源：{source!r}，只能是 'category' 或 'tag'")
+
+
 def build_front_matter(article, categories, tags):
     """
     根据文章信息生成 Hugo 的 YAML front matter（文件开头 --- 之间的部分）。
+    categories / tags 字段分别写入分类还是标签，由配置区 CATEGORIES_SOURCE /
+    TAGS_SOURCE 决定，因此两个字段的内容来源可以互换。
     参数：
         article：文章字典（load_articles 返回的格式）
         categories：分类字典 {分类ID: 分类名称}
@@ -230,6 +255,8 @@ def build_front_matter(article, categories, tags):
     """
     # 分类名称：通过文章的分类编号查分类表，查不到则跳过
     category_name = categories.get(article["cate_id"])
+    # 分类名称列表：Z-Blog 每篇文章只有一个分类，查不到分类时列表为空
+    category_names = [category_name] if category_name else []
     # 标签名称列表：把标签编号逐个换成标签名称
     tag_names = [tags[tag_id] for tag_id in parse_tag_ids(article["tag_field"]) if tag_id in tags]
 
@@ -256,15 +283,12 @@ def build_front_matter(article, categories, tags):
     if article["is_top"]:
         lines.append("weight: 1")
 
-    # 写入分类（Z-Blog 每篇文章只有一个分类）
-    if category_name:
-        lines.append("categories:")
-        lines.append(f"  - {make_yaml_string(category_name)}")
-    # 写入标签列表（可能没有标签，则不写 tags 字段）
-    if tag_names:
-        lines.append("tags:")
-        for name in tag_names:
-            lines.append(f"  - {make_yaml_string(name)}")
+    # 按配置区的选择写入 categories / tags，两个字段的内容来源可以互换
+    for field, source in (("categories", CATEGORIES_SOURCE), ("tags", TAGS_SOURCE)):
+        names = resolve_names(source, category_names, tag_names)
+        if names:
+            lines.append(f"{field}:")
+            lines.extend(f"  - {make_yaml_string(name)}" for name in names)
 
     # 收尾的 ---
     lines.append("---")
