@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- 读取 Access 数据库中的文章表（blog_Article）、分类表（blog_Category）、标签表（blog_Tag）
+- 读取 Access 数据库中的文章表（表名可配置，默认 blog_Article）、分类表（blog_Category）、标签表（blog_Tag）
 - 每篇文章生成一个 Markdown 文件（带 Hugo 的 YAML front matter）
 - 正文由 HTML 自动转换成 Markdown 格式
 - 分类、标签一并转换到 front matter 中
@@ -22,6 +22,17 @@ pip install pyodbc markdownify
 ```
 
 > 注意：Access ODBC 驱动的位数（32/64 位）需要和 Python 的位数一致，否则会报“未发现数据源名称”。
+
+## 配置
+
+打开 `zblog2hugo.py` 顶部的“配置区”，按需修改：
+
+| 配置项 | 说明 | 默认值 |
+| --- | --- | --- |
+| `ARTICLE_TABLE` | 文章表表名；表名含空格等特殊字符时用方括号括起来，如 `[My Articles]` | `blog_Article` |
+| `ODBC_DRIVER` | Access ODBC 驱动名称（32/64 位需与 Python 一致） | `Microsoft Access Driver (*.mdb, *.accdb)` |
+| `TIMEZONE_SUFFIX` | 输出日期的时区后缀 | `+08:00` |
+| `MIN_PUBLISH_LEVEL` | 最低发布等级，低于此值的文章标记为草稿 | `2` |
 
 ## 使用方法
 

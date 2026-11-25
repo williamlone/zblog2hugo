@@ -4,7 +4,7 @@ zblog2hugo.py —— 把 Z-Blog ASP 2.3 数据库（zblog.mdb）里的文章转�
 
 功能说明：
     1. 读取 Access 数据库中的三张表：
-        - blog_Article  ：文章表（标题、正文、发布时间等）
+        - 文章表（表名见配置区 ARTICLE_TABLE，默认 blog_Article）：文章表（标题、正文、发布时间等）
         - blog_Category ：分类表（cate_ID -> cate_Name）
         - blog_Tag      ：标签表（tag_ID -> tag_Name）
     2. 把每篇文章生成为一个 Markdown 文件（带 Hugo 的 YAML front matter），
@@ -45,6 +45,10 @@ TIMEZONE_SUFFIX = "+08:00"
 # 最低发布等级：Z-Blog 中 log_Level >= 2 视为已发布，
 # 小于该值（草稿、待审核）的文章会标记为 draft: true
 MIN_PUBLISH_LEVEL = 2
+
+# 文章表表名（默认 blog_Article；数据库里表名不同时在这里修改即可）
+# 表名含空格等特殊字符时，请用方括号括起来，例如：[My Articles]
+ARTICLE_TABLE = "blog_Article"
 
 # 正文里的博客地址占位符，输出时会被配置表里的 ZC_BLOG_HOST 替换
 HOST_PLACEHOLDER = "<#ZC_BLOG_HOST#>"
@@ -126,17 +130,18 @@ def load_blog_host(conn):
 
 def load_articles(conn):
     """
-    读取文章表 blog_Article 中的所有文章，返回文章列表。
+    读取配置区 ARTICLE_TABLE 指定的文章表中的所有文章，返回文章列表。
     每篇文章是一个字典，只包含转换需要的字段。
     参数 conn：数据库连接对象。
     """
     articles = []
     cursor = conn.cursor()
     # 只查询转换需要的字段（不读取摘要 log_Intro 和评论，正文统一转 Markdown）
-    sql = """
+    # 表名来自配置区，不能作为参数传入 SQL，因此直接拼接到语句里
+    sql = f"""
         SELECT log_ID, log_CateID, log_Url, log_Title, log_Content,
                log_PostTime, log_Level, log_IsTop, log_Tag
-        FROM blog_Article
+        FROM {ARTICLE_TABLE}
         ORDER BY log_ID
     """
     for row in cursor.execute(sql):
